@@ -35,10 +35,28 @@ pub fn execute(
 }
 
 pub fn add_message(deps: DepsMut, info:MessageInfo, topic:String, message:String) -> Result<Response, ContractError> {
-    
+    //load current id
+    let mut current_id = CURRENT_ID.load(deps.storage)?;
 
-    MESSAGES.save(deps.storage, message.id.u128(), &message)?;
-    Ok(Response::default())
+    //create new message
+    let new_message = Message {
+        id: Uint128::from(current_id),
+        owner: info.sender,
+        topic: topic,
+        message: message
+    };
+
+    //increment current id
+    current_id = current_id.checked_add(1).unwrap();
+
+    MESSAGES.save(deps.storage, new_message.id.u128(), &new_message)?;
+
+    //save current id
+    CURRENT_ID.save(deps.storage, &current_id)?;
+    
+    Ok(Response::new()
+        .add_attribute("action", "add_message")
+        .add_attribute("id", new_message.id.to_string()))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -53,23 +71,39 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 fn query_current_id(deps: Deps) -> StdResult<Uint128> {
-    unimplemented!()
+    let current_id = CURRENT_ID.load(deps.storage)?;
+    Ok(Uint128::from(current_id))
 }
 
 fn query_all_messages(deps: Deps) -> StdResult<MessagesResponse> {
-    unimplemented!()
+    let messages: Vec<Message> = MESSAGES
+        .range(deps.storage, None, None, Order::Ascending)
+        .map(|item| item.unwrap().1)
+        .collect();
+    Ok(MessagesResponse { messages })
 }
 
 fn query_messages_by_addr(deps: Deps, address: String) -> StdResult<MessagesResponse> {
-    unimplemented!()
+    let messages: Vec<Message> = MESSAGES
+        .range(deps.storage, None, None, Order::Ascending)
+        .map(|item| item.unwrap().1)
+        .filter(|message| message.owner == address)
+        .collect();
+    Ok(MessagesResponse { messages })
 }
 
 fn query_messages_by_topic(deps: Deps, topic: String) -> StdResult<MessagesResponse> {
-    unimplemented!()
+    let messages: Vec<Message> = MESSAGES
+        .range(deps.storage, None, None, Order::Ascending)
+        .map(|item| item.unwrap().1)
+        .filter(|message| message.topic == topic)
+        .collect();
+    Ok(MessagesResponse { messages })
 }
 
 fn query_messages_by_id(deps: Deps, id: Uint128) -> StdResult<MessagesResponse> {
-    unimplemented!()
+    let message = MESSAGES.load(deps.storage, id.u128())?;
+    Ok(MessagesResponse { messages: vec![message] })
 }
 
 #[cfg(test)]
@@ -79,12 +113,22 @@ mod tests {
     use cosmwasm_std::{coins, from_binary};
 
     const SENDER: &str = "sender_address";
+    const SENDER2: &str = "sender_address2";
 
     fn setup_contract(deps: DepsMut) {
         let msg = InstantiateMsg { };
         let info = mock_info(SENDER, &[]);
         let res = instantiate(deps, mock_env(), info, msg).unwrap();
         assert_eq!(0, res.messages.len());
+    }
+
+    fn add_message(deps: DepsMut, sender:&str, topic: String, message: String) {
+        let msg = ExecuteMsg::AddMessage {
+            topic: topic,
+            message: message
+        };
+        let info = mock_info(sender, &[]);
+        execute(deps, mock_env(), info, msg).unwrap();
     }
 
     #[test]
@@ -99,37 +143,56 @@ mod tests {
     }
 
     #[test]
-    fn _add_message() {
+    fn add_2_messages_and_query_all_messages() {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut());
+        add_message(deps.as_mut(), SENDER, "topic".to_string(), "message1".to_string());
+        add_message(deps.as_mut(), SENDER,"topic".to_string(), "message2".to_string());
 
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetAllMessage {}).unwrap();
+        let value: MessagesResponse = from_binary(&res).unwrap();
+        assert_eq!(2, value.messages.len());
     }
 
     #[test]
-    fn _query_all_messages() {
+    fn add_messages_from_two_owners_and_query_messages_by_owner() {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut());
+        add_message(deps.as_mut(), SENDER, "topic".to_string(), "message1".to_string());
+        add_message(deps.as_mut(), SENDER,"topic".to_string(), "message2".to_string());
+        add_message(deps.as_mut(), SENDER2, "topic".to_string(), "message3".to_string());
 
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetMessagesByAddr { address: SENDER.to_string() }).unwrap();
+        let value: MessagesResponse = from_binary(&res).unwrap();
+        assert_eq!(2, value.messages.len());
     }
 
     #[test]
-    fn _query_messages_by_owner() {
+    fn add_2_messages_and_query_messages_by_id() {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut());
 
+        add_message(deps.as_mut(), SENDER, "topic".to_string(), "message1".to_string());
+        add_message(deps.as_mut(), SENDER,"topic".to_string(), "message2".to_string());
+        add_message(deps.as_mut(), SENDER2, "topic".to_string(), "message3".to_string());
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetMessagesById { id: Uint128::from(1u64) }).unwrap();
+        let value: MessagesResponse = from_binary(&res).unwrap();
+        assert_eq!(1, value.messages.len());
     }
 
     #[test]
-    fn _query_messages_by_id() {
+    fn query_messages_by_topic() {
         let mut deps = mock_dependencies();
         setup_contract(deps.as_mut());
 
-    }
+        add_message(deps.as_mut(), SENDER, "topic".to_string(), "message1".to_string());
+        add_message(deps.as_mut(), SENDER,"topic".to_string(), "message2".to_string());
+        add_message(deps.as_mut(), SENDER2, "topic".to_string(), "message3".to_string());
 
-    #[test]
-    fn _query_messages_by_topic() {
-        let mut deps = mock_dependencies();
-        setup_contract(deps.as_mut());
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetMessagesByTopic { topic: "topic".to_string() }).unwrap();
+        let value: MessagesResponse = from_binary(&res).unwrap();
+        assert_eq!(3, value.messages.len());
 
     }
 }

@@ -14,6 +14,4 @@ pub struct Message {
 
 pub const CURRENT_ID: Item<u128> = Item::new("current_id");
 
-//Map has a 
-
 pub const MESSAGES: Map<u128, Message> = Map::new("messages");

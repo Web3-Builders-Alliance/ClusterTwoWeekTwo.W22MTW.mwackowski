@@ -75,23 +75,35 @@ describe("Messages Fullstack Test", () => {
     }).timeout(100000);
 
     xit("Add Message on testnet", async() => {
+        let client = await setupClient(mnemonic, rpcEndpoint, "0.025ujunox");
+        let res = await client.execute(await getAddress(mnemonic), 
+        contract_address, {  add_message: {topic: "some topic", message: "some message"}},
+        "auto", "", 
+        [{amount: "10000", denom: "ujunox"}]);
+        console.log(res);
     }).timeout(20000);
 
     xit("Query all messages on testnet", async () => {
-        
+        let client = await setupClient(mnemonic, rpcEndpoint, "0.025ujunox");
+        let res = await client.queryContractSmart(contract_address, { get_all_message : {}});
+        console.log(res);
     }).timeout(50000);
 
-    it("Query get all messages by addr", async() => {
+    xit("Query get all messages by addr", async() => {
         let client = await setupClient(mnemonic, rpcEndpoint, "0.025ujunox");
         let res = await client.queryContractSmart(contract_address, { get_messages_by_addr: { address: "" } } );
         console.log(res);
     }).timeout(100000);
 
     xit("Query get current id", async() => {
-
+        let client = await setupClient(mnemonic, rpcEndpoint, "0.025ujunox");
+        let res = await client.queryContractSmart(contract_address, { get_current_id: {  } } );
+        console.log(res);
     }).timeout(100000);
 
-    xit("Query get messages by topic", async() => {
-
+    it("Query get messages by topic", async() => {
+        let client = await setupClient(mnemonic, rpcEndpoint, "0.025ujunox");
+        let res = await client.queryContractSmart(contract_address, { get_messages_by_topic: { topic: "lol" } } );
+        console.log(res);
     }).timeout(100000);
 });
